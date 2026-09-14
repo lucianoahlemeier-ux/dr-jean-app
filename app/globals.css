@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Brand accent comes from lib/persona.ts, injected in layout.tsx via a style
+     tag so the human only edits one file. Fallbacks match the placeholder. */
+  --accent: #1e3a2b;
+  --accent-fg: #fff8f2;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #fff8f2;
+  color: #2b2622;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Mobile safety: never let a stray wide element cause horizontal scroll. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Subtle paper-grain warmth on the big hero/section surfaces. */
+.paper {
+  background-image: radial-gradient(
+      1200px 600px at 50% -10%,
+      rgba(243, 231, 216, 0.9),
+      transparent 60%
+    ),
+    linear-gradient(180deg, #fdf3e8 0%, #fbeede 100%);
+}
+
+/* Report reading layout — comfortable measure, quoted chat lines styled like
+   quoted messages. Body copy uses the sans stack at a real medium weight
+   (Georgia has no true 500 — browsers silently snap it back to 400, so a
+   "bulkier" body needs a typeface that actually supports the weight) at a
+   slightly larger size/line-height/paragraph gap so it scans as substantial,
+   not thin. Headings stay serif + 700 (set explicitly below, since they'd
+   otherwise inherit the new sans base) so they read clearly heavier than
+   body — matching the reference's serif-display-over-sans-body mix. */
+.report-prose {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 1.0625rem;
+  font-weight: 500;
+  line-height: 1.8;
+  color: #2b2622;
+}
+.report-prose h1,
+.report-prose h2,
+.report-prose h3 {
+  font-family: Georgia, Cambria, "Times New Roman", serif;
+}
+.report-prose h1 {
+  font-size: 2rem;
+  line-height: 1.2;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+}
+/* Section headers (docs/03 sections 3-11): centered, serif, with a small
+   decorative "— ◆ —" ornament underneath in the persona's accent colour. The
+   ornament is CSS chrome, not model-authored text — keeps the model's
+   heading strings clean and the divider visually consistent every time. */
+.report-prose h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 2.5rem 0 0.5rem;
+  color: #1f1a16;
+  text-align: center;
+}
+.report-prose h2::after {
+  content: "— ◆ —";
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  opacity: 0.55;
+}
+.report-prose h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 1.75rem 0 0.5rem;
+}
+.report-prose p {
+  margin: 0 0 1.25rem;
+}
+.report-prose em {
+  color: #6b6259;
+}
+.report-prose ul,
+.report-prose ol {
+  margin: 0 0 1.1rem;
+  padding: 0 0 0 1.25rem;
+}
+.report-prose ul {
+  list-style-type: disc;
+}
+.report-prose ol {
+  list-style-type: decimal;
+}
+.report-prose li {
+  margin: 0.35rem 0;
+  padding-left: 0.25rem;
+}
+.report-prose strong {
+  color: #1f1a16;
+}
+/* Fallback only — the quote convention (docs/03, lib/prompt.ts) uses ```chat
+   fenced blocks rendered as bubbles (see ChatQuote in the report page), not
+   real blockquotes. This just keeps a stray `>` from looking broken. */
+.report-prose blockquote {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  background: #f1ede6;
+  border-radius: 0.9rem 0.9rem 0.9rem 0.2rem;
+  border: none;
+  color: #2b2622;
+  font-style: normal;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.95rem;
+}
+.report-prose hr {
+  border: none;
+  border-top: 1px solid #ecdfce;
+  margin: 2rem 0;
+}
+/* Wide content (leaderboard / star-review tables, code) scrolls inside itself
+   on a phone instead of stretching the page. Images shrink to fit. */
+.report-prose table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0 0 1.1rem;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.9rem;
+}
+.report-prose th,
+.report-prose td {
+  border: 1px solid #ecdfce;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.report-prose pre {
+  overflow-x: auto;
+}
+.report-prose img,
+.report-prose video {
+  max-width: 100%;
+  height: auto;
+}
+/* Slightly smaller report title on phones so it never wraps awkwardly. */
+@media (max-width: 480px) {
+  .report-prose h1 {
+    font-size: 1.6rem;
+  }
+}

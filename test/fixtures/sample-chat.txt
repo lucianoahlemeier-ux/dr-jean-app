@@ -1,0 +1,12 @@
+[01.01.24, 10:00:00] Amir: Messages and calls are end-to-end encrypted. Only people in this chat can read, listen to, or share them.
+[01.01.24, 10:00:05] Amir: hey everyone
+[01.01.24, 10:00:10] ~ Elio: yo whats up
+[01.01.24, 10:00:20] Amir: nothing much
+[01.01.24, 10:00:30] Paul: hi guys
+[01.01.24, 10:00:40] Amir: lets meet up
+[01.01.24, 10:00:50] ~ Elio: sure when
+[01.01.24, 10:01:00] Paul: tomorrow works
+[01.01.24, 10:01:10] Amir: perfect
+[01.01.24, 10:01:20] ~ Elio: bet
+[01.01.24, 10:01:30] Paul: see u then
+[01.01.24, 10:01:40] Amir: yessir

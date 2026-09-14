@@ -1,0 +1,41 @@
+# Secrets / environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+id_rsa*
+
+# Private chat data — NEVER commit. This repo is public, and real WhatsApp
+# exports contain other people's private messages. Test fixtures are small,
+# synthetic .txt files under test/fixtures/ and are committed intentionally;
+# real exports (.zip, the _chat.txt inside them) are not.
+*.zip
+_chat.txt
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Node / Next.js (for when the app gets built)
+node_modules/
+.next/
+out/
+dist/
+build/
+*.log
+npm-debug.log*
+.vercel
+
+# Next.js generated
+next-env.d.ts
+.tsbuildinfo
+*.tsbuildinfo
+
+# Playwright (test/e2e) generated output
+/test-results/
+/playwright-report/
+/blob-report/
