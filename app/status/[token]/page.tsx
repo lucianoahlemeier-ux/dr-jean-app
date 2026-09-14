@@ -25,6 +25,20 @@ const ROTATING_MESSAGES = [
   "getting a little too invested…",
 ];
 
+// Bounded upper bound on how long the status page will poll before giving up
+// on its own. Without this, a run whose backend process dies mid-job (e.g. a
+// local dev server killed by the machine sleeping, or any other case where
+// nothing ever writes status="failed") leaves the poller spinning forever —
+// the DB row genuinely never changes, so no server-side signal can end it.
+// 8 minutes is generous headroom above the map-reduce chunked path's own
+// per-call timeouts, so a real (slow but alive) run is never cut off early.
+const MAX_WAIT_MS = 8 * 60 * 1000;
+
+// Consecutive fetch failures before treating the connection itself as the
+// problem (distinct from "still generating") — one blip shouldn't surface an
+// error, but a sustained one (e.g. the dev server is down) should.
+const MAX_CONSECUTIVE_FETCH_FAILURES = 5;
+
 export default function StatusPage({
   params,
 }: {
@@ -37,25 +51,62 @@ export default function StatusPage({
 
   useEffect(() => {
     let active = true;
+    const startedAt = Date.now();
+    let consecutiveFailures = 0;
+
     const poll = async () => {
+      if (!active) return;
+
+      if (Date.now() - startedAt > MAX_WAIT_MS) {
+        setError(
+          "This is taking much longer than usual, so we stopped waiting. " +
+            "Your report may still finish in the background — but it's best to try again.",
+        );
+        active = false;
+        clearInterval(id);
+        return;
+      }
+
       try {
         const res = await fetch(`/api/report/${params.token}`, {
           cache: "no-store",
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          consecutiveFailures++;
+          if (consecutiveFailures >= MAX_CONSECUTIVE_FETCH_FAILURES) {
+            setError(
+              "We lost the connection to the server while checking your report. Please try again.",
+            );
+            active = false;
+            clearInterval(id);
+          }
+          return;
+        }
+        consecutiveFailures = 0;
         const data = await res.json();
         if (!active) return;
         setStatus(data.status);
         if (data.status === "done") {
+          active = false;
+          clearInterval(id);
           router.push(`/r/${params.token}`);
         } else if (data.status === "failed") {
+          active = false;
+          clearInterval(id);
           setError(
             data.error ||
               "Something went wrong writing your report. Please try again.",
           );
         }
       } catch {
-        /* keep polling */
+        consecutiveFailures++;
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FETCH_FAILURES) {
+          setError(
+            "We lost the connection to the server while checking your report. Please try again.",
+          );
+          active = false;
+          clearInterval(id);
+        }
       }
     };
     poll();

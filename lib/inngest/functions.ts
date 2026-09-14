@@ -117,6 +117,16 @@ export const generateReportFn = inngest.createFunction(
     } = event.data;
 
     const supabase = getSupabase();
+    const runStartedAt = Date.now();
+    const logStage = (stage: string, extra?: Record<string, unknown>) => {
+      // Safe fields only: reportId + stage name + elapsed ms. Never the
+      // transcript, prompt, report text, tokens, or any env var.
+      console.log(
+        `[report ${reportId}] ${stage} (+${Date.now() - runStartedAt}ms, attempt ${attempt + 1})`,
+        extra ?? "",
+      );
+    };
+    logStage("run-start");
 
     try {
       await step.run("mark-processing", async () => {
@@ -164,6 +174,11 @@ export const generateReportFn = inngest.createFunction(
 
       let report: { report: string; messageCount: number };
 
+      logStage("routing-decided", {
+        estimatedTokens,
+        chunked: estimatedTokens > SINGLE_CALL_MAX_TOKENS,
+      });
+
       if (estimatedTokens <= SINGLE_CALL_MAX_TOKENS) {
         // ── existing single-call path — UNCHANGED ──────────────────────
         report = await step.run("generate", async () => {
@@ -183,6 +198,7 @@ export const generateReportFn = inngest.createFunction(
         // splitIntoChunks is pure/synchronous (no I/O), so recomputing it on
         // replay is free.
         const chunks = splitIntoChunks(parsed.messages, name_overrides, CHUNK_BUDGET_TOKENS);
+        logStage("chunked-path", { chunkCount: chunks.length });
 
         const mode = getGenMode();
         // claude-code spawns a real CLI subprocess per map call — keep that
@@ -228,6 +244,8 @@ export const generateReportFn = inngest.createFunction(
         });
       }
 
+      logStage("generation-complete");
+
       await step.run("save-report", async () => {
         await supabase
           .from("reports")
@@ -254,10 +272,12 @@ export const generateReportFn = inngest.createFunction(
         });
       });
 
+      logStage("run-complete");
       finishRun(reportId);
       return { ok: true, reportId };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      logStage("run-failed", { error: message });
       // A real chunk-analysis failure was previously written straight to
       // `status: "failed"` even though Inngest (retries: 1) was about to
       // silently retry the WHOLE function from the top — the site showed
