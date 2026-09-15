@@ -14,7 +14,7 @@ export async function GET(
     const { data, error } = await supabase
       .from("reports")
       .select(
-        "token, status, report_markdown, message_count, chat_title, cover_image_url, error, created_at",
+        "token, status, report_markdown, message_count, chat_title, cover_image_url, error, created_at, paid",
       )
       .eq("token", params.token)
       .single();

@@ -21,7 +21,12 @@ create table if not exists public.reports (
   chat_title        text,
   cover_image_url   text,
   created_at        timestamptz not null default now(),
-  error             text
+  error             text,
+  -- Paywall (Stripe, one-time payment per report — see docs on the paywall).
+  paid                      boolean not null default false,
+  paid_at                   timestamptz,
+  stripe_session_id         text,
+  stripe_payment_intent_id  text
 );
 
 create index if not exists reports_token_idx on public.reports (token);

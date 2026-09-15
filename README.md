@@ -92,14 +92,32 @@ cp .env.example .env.local   # then fill it in (see below)
   copy the **Event Key** → `INNGEST_EVENT_KEY` and **Signing Key** →
   `INNGEST_SIGNING_KEY`.
 
-### 5. Resend (optional)
+### 5. Stripe (the paywall)
+
+- Create an account at <https://dashboard.stripe.com/>.
+- **Developers → API keys**: copy the **Secret key** → `STRIPE_SECRET_KEY`.
+- **Developers → Webhooks → Add endpoint**: URL `{your app url}/api/stripe/webhook`,
+  listening for `checkout.session.completed`. Copy the endpoint's **Signing
+  secret** (`whsec_...`) → `STRIPE_WEBHOOK_SECRET`. For local dev, use the
+  [Stripe CLI](https://stripe.com/docs/stripe-cli) instead:
+  `stripe listen --forward-to localhost:3000/api/stripe/webhook` (it prints a
+  `whsec_...` to use locally).
+- `REPORT_PRICE_CENTS` (optional) — price to unlock one report, in cents.
+  Defaults to `499` ($4.99).
+- If you already have a live Supabase database (created before the paywall
+  shipped), run [`supabase/migrations/0001_add_paywall.sql`](supabase/migrations/0001_add_paywall.sql)
+  once in the SQL editor — it's just `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`,
+  safe to run more than once. A fresh `supabase/schema.sql` already includes
+  these columns.
+
+### 6. Resend (optional)
 
 - The private link is the real deliverable, so email is optional — without a key
   the job just logs the link to the server console.
 - To enable: create a key at <https://resend.com/> → `RESEND_API_KEY`, and set a
   verified sender in `RESEND_FROM`.
 
-### 6. Run it
+### 7. Run it
 
 Two terminals:
 
@@ -141,8 +159,18 @@ The report structure and craft rules live in [`lib/prompt.ts`](lib/prompt.ts).
 ## Scope (v1)
 
 WhatsApp-only, Classic Report only, email-only delivery. Shown but **not built**
-(marked "coming soon"): iMessage, the Deep Report / Mirror tiers, payments,
-accounts. These are intentional TODOs, not omissions.
+(marked "coming soon"): iMessage, the Deep Report / Mirror tiers, accounts.
+These are intentional TODOs, not omissions.
+
+**The paywall:** every report is generated in full, but an unpaid visitor at
+`/r/{token}` sees only the "star review" headline stats — dimension names +
+star ratings, no written analysis — with the rest of the report blurred
+behind an "Unlock full report" card. Paying via Stripe Checkout (one-time,
+no account) flips a `paid` flag on that report's row via the
+`checkout.session.completed` webhook, and the token URL then always shows
+the full report. See [`components/PaywallGate.tsx`](components/PaywallGate.tsx),
+[`lib/reportPreview.ts`](lib/reportPreview.ts), and
+[`app/api/stripe/webhook`](app/api/stripe/webhook/route.ts).
 
 ---
 
@@ -159,14 +187,22 @@ app/
   api/generate             validate + stash + enqueue (fast)
   api/report/[token]       status/report JSON (polled by the status page)
   api/inngest              Inngest serve endpoint
+  api/checkout/[token]     creates a Stripe Checkout session to unlock a report
+  api/stripe/webhook       marks a report paid on checkout.session.completed
+components/
+  PaywallGate.tsx          blurs the report body + the unlock card
+  CheckoutSyncing.tsx      brief "unlocking…" poll right after Stripe redirects back
 lib/
   persona.ts               ← the brand. fill this in.
   prompt.ts                the Classic Report scaffold + persona system prompt
   whatsapp.ts              defensive WhatsApp export parser
   generate.ts              the single Claude call
   inngest/                 client + the generation job
+  reportPreview.ts         pulls the free "headline stats" teaser out of the report
+  pricing.ts, stripe.ts    paywall price + server-only Stripe client
   supabase.ts, email.ts, types.ts
 supabase/schema.sql        DB + buckets
+supabase/migrations/       one-off ALTERs for databases created before a feature shipped
 sample/_chat.txt           a sample export to test against
 ```
 
@@ -176,4 +212,7 @@ sample/_chat.txt           a sample export to test against
 
 Push to GitHub → import into Vercel → add the same env vars → set
 `NEXT_PUBLIC_APP_URL` to your deployed URL. Register the app with Inngest Cloud
-(point it at `https://your-app.vercel.app/api/inngest`). Done.
+(point it at `https://your-app.vercel.app/api/inngest`). Register the Stripe
+webhook (point it at `https://your-app.vercel.app/api/stripe/webhook`,
+`checkout.session.completed`) and set `STRIPE_WEBHOOK_SECRET` to its signing
+secret. Done.

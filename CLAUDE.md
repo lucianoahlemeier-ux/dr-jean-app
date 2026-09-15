@@ -12,8 +12,10 @@ You are building the MVP specified in `docs/`. This file governs how you work.
 4. **Free-tier only.** Next.js/Vercel, Supabase, Inngest, Resend, Anthropic API. If a task
    seems to need paid infra, stop and ask.
 5. **MVP scope only.** WhatsApp-only, Classic Report only, email-only delivery. Anything
-   else (iMessage, WhatsApp delivery, payments, auth, the "Deep Report"/"Mirror" tiers) is
-   out of scope — note it as a TODO, don't build it.
+   else (iMessage, WhatsApp delivery, auth, the "Deep Report"/"Mirror" tiers) is out of
+   scope — note it as a TODO, don't build it. The one-time-payment paywall (Stripe) shipped
+   and IS in scope — see the report page, `app/api/checkout/[token]`, and
+   `app/api/stripe/webhook`.
 6. **Ask before scope-adding.** If a doc is ambiguous, ask rather than invent.
 
 ## Why the architecture is shaped this way (don't "simplify" it away)

@@ -63,4 +63,9 @@ export interface ReportRecord {
   cover_image_url: string | null;
   created_at: string;
   error: string | null;
+  /** Paywall — one-time Stripe payment unlocks the full report. */
+  paid: boolean;
+  paid_at: string | null;
+  stripe_session_id: string | null;
+  stripe_payment_intent_id: string | null;
 }
