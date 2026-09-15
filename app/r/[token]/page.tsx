@@ -2,16 +2,14 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { Header } from "@/components/Header";
 import { ShareBar } from "@/components/ShareBar";
-import { PaywallGate } from "@/components/PaywallGate";
+import { ReportBody } from "@/components/ReportBody";
 import { CheckoutSyncing } from "@/components/CheckoutSyncing";
 import { getSupabase } from "@/lib/supabase";
 import { persona } from "@/lib/persona";
 import { formatPrice } from "@/lib/pricing";
-import { extractHeadlineStats } from "@/lib/reportPreview";
+import { extractHeadlineStats, splitReportSections } from "@/lib/reportPreview";
 
 export const dynamic = "force-dynamic";
 
@@ -151,6 +149,7 @@ export default async function ReportPage({
   const isPaid = data.paid === true;
   const headlineStats = isPaid ? null : extractHeadlineStats(body);
   const showCheckoutSyncing = !isPaid && searchParams?.checkout === "success";
+  const sections = splitReportSections(body);
 
   const markdownComponents = {
     pre({ children }: { children?: ReactNode }) {
@@ -221,48 +220,39 @@ export default async function ReportPage({
           </div>
         )}
 
-        <div className="report-prose">
-          {isPaid ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-              {body}
-            </ReactMarkdown>
-          ) : (
-            <>
-              {headlineStats && (
-                <div className="mb-8 rounded-2xl border border-ink/10 bg-white/70 p-6 shadow-card">
-                  <p className="mb-4 text-center text-xs font-medium uppercase tracking-wide text-ink-soft">
-                    the star review — headline stats
-                  </p>
-                  <ul className="space-y-2">
-                    {headlineStats.stats.map((stat, i) => (
-                      <li
-                        key={i}
-                        className="flex items-center justify-between gap-4 text-sm"
-                      >
-                        <span className="font-medium text-ink">{stat.label}</span>
-                        <span aria-hidden className="tracking-wide">
-                          {stat.stars}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  {headlineStats.verdict && (
-                    <p className="mt-4 text-center font-serif text-ink">
-                      {headlineStats.verdict}
-                    </p>
-                  )}
-                </div>
+        <div className="flex flex-col gap-5">
+          {!isPaid && headlineStats && (
+            <div className="rounded-2xl border border-ink/10 bg-white/70 p-6 shadow-card">
+              <p className="mb-4 text-center text-xs font-medium uppercase tracking-wide text-ink-soft">
+                the star review — headline stats
+              </p>
+              <ul className="space-y-2">
+                {headlineStats.stats.map((stat, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between gap-4 text-sm"
+                  >
+                    <span className="font-medium text-ink">{stat.label}</span>
+                    <span aria-hidden className="tracking-wide">
+                      {stat.stars}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {headlineStats.verdict && (
+                <p className="mt-4 text-center font-serif text-ink">
+                  {headlineStats.verdict}
+                </p>
               )}
-              <PaywallGate token={params.token} priceLabel={formatPrice()}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={markdownComponents}
-                >
-                  {body}
-                </ReactMarkdown>
-              </PaywallGate>
-            </>
+            </div>
           )}
+          <ReportBody
+            sections={sections}
+            isPaid={isPaid}
+            token={params.token}
+            priceLabel={formatPrice()}
+            components={markdownComponents}
+          />
         </div>
 
         <div className="mt-10 flex flex-col items-center gap-3 text-center text-sm text-ink-soft">
