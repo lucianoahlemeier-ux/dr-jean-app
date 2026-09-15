@@ -3,12 +3,17 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { Header } from "@/components/Header";
 import { ShareBar } from "@/components/ShareBar";
-import { ReportBody } from "@/components/ReportBody";
+import { ReportBody, ReportTeaser } from "@/components/ReportBody";
 import { CheckoutSyncing } from "@/components/CheckoutSyncing";
 import { getSupabase } from "@/lib/supabase";
 import { persona } from "@/lib/persona";
 import { formatPrice } from "@/lib/pricing";
-import { extractHeadlineStats, splitReportSections } from "@/lib/reportPreview";
+import {
+  extractHeadlineStats,
+  splitReportSections,
+  pickTeaserSection,
+  clampTeaser,
+} from "@/lib/reportPreview";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +90,10 @@ export default async function ReportPage({
   const headlineStats = isPaid ? null : extractHeadlineStats(body);
   const showCheckoutSyncing = !isPaid && searchParams?.checkout === "success";
   const sections = splitReportSections(body);
+  // Unpaid visitors are handed ONE clamped section, never the full list —
+  // the locked prose must not be sitting in the page source.
+  const teaserSection = isPaid ? null : pickTeaserSection(sections);
+  const teaser = teaserSection ? clampTeaser(teaserSection) : null;
 
   return (
     <main className="min-h-screen">
@@ -163,49 +172,65 @@ export default async function ReportPage({
               )}
             </div>
           )}
-          <ReportBody
-            sections={sections}
-            isPaid={isPaid}
-            token={params.token}
-            priceLabel={formatPrice()}
-          />
+          {isPaid ? (
+            <ReportBody sections={sections} />
+          ) : (
+            teaser && (
+              <ReportTeaser
+                markdown={teaser}
+                token={params.token}
+                priceLabel={formatPrice()}
+              />
+            )
+          )}
         </div>
 
-        <div className="mt-10 flex flex-col items-center gap-3 text-center text-sm text-ink-soft">
-          <Image
-            src={persona.avatar}
-            alt={persona.name}
-            width={40}
-            height={40}
-            className="h-10 w-10 rounded-full object-cover shadow-card"
-          />
-          <p>
-            Prepared by {persona.name}. The conversation used to write this
-            wasn&apos;t saved.
-          </p>
-        </div>
+        {/* Everything below is PAID-ONLY. An unpaid page ends at the unlock
+            card: a sign-off for a report they haven't read, a sticky share
+            bar for a link that shows the reader a paywall, and a "get
+            another report" pitch all just compete with the one action the
+            page is asking for. */}
+        {isPaid && (
+          <div className="mt-10 flex flex-col items-center gap-3 text-center text-sm text-ink-soft">
+            <Image
+              src={persona.avatar}
+              alt={persona.name}
+              width={40}
+              height={40}
+              className="h-10 w-10 rounded-full object-cover shadow-card"
+            />
+            <p>
+              Prepared by {persona.name}. The conversation used to write this
+              wasn&apos;t saved.
+            </p>
+          </div>
+        )}
       </article>
 
-      <ShareBar url={url} title={data.chat_title} />
+      {isPaid && (
+        <>
+          <ShareBar url={url} title={data.chat_title} />
 
-      {/* Which chat is next? — loops users back into the wizard. */}
-      <section className="paper mt-12 border-t border-ink/5">
-        <div className="mx-auto max-w-2xl px-5 py-16 text-center">
-          <h2 className="font-serif text-3xl text-ink">
-            Which chat is next?
-          </h2>
-          <p className="mt-3 text-ink-soft">
-            Your family group. The lads&apos; trip. That one situationship.
-          </p>
-          <Link
-            href="/get-report"
-            className="mt-8 inline-block rounded-full px-8 py-4 font-serif text-lg shadow-soft"
-            style={{ background: "var(--accent)", color: "var(--accent-fg)" }}
-          >
-            Get another report →
-          </Link>
-        </div>
-      </section>
+          {/* Which chat is next? — loops users back into the wizard. */}
+          <section className="paper mt-12 border-t border-ink/5">
+            <div className="mx-auto max-w-2xl px-5 py-16 text-center">
+              <h2 className="font-serif text-3xl text-ink">
+                Which chat is next?
+              </h2>
+              <p className="mt-3 text-ink-soft">
+                Your family group. The lads&apos; trip. That one situationship.
+              </p>
+              <Link
+                href="/get-report"
+                className="mt-8 inline-block rounded-full px-8 py-4 font-serif text-lg shadow-soft"
+                style={{ background: "var(--accent)", color: "var(--accent-fg)" }}
+              >
+                Get another report →
+              </Link>
+            </div>
+          </section>
+        </>
+      )}
     </main>
   );
 }

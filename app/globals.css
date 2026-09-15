@@ -26,6 +26,31 @@ body {
   overflow-x: hidden;
 }
 
+/* The paywall card settling onto the blurred teaser (components/ReportBody
+   ReportTeaser). Short, eased, and slightly delayed so the reader's eye is
+   on the prose first and the lock arrives a beat later. Deliberately NOT an
+   opacity animation on the blur layers themselves — an animating ancestor
+   opacity creates a backdrop root, which would make their backdrop-filter
+   drop out mid-transition and pop back in at the end. */
+@keyframes unlockRise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.unlock-rise {
+  animation: unlockRise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .unlock-rise {
+    animation: none;
+  }
+}
+
 /* Subtle paper-grain warmth on the big hero/section surfaces. */
 .paper {
   background-image: radial-gradient(

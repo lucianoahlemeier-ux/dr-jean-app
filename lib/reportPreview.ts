@@ -99,3 +99,59 @@ export function splitReportSections(body: string): string[] {
 
   return sections;
 }
+
+// ─── the free teaser ─────────────────────────────────────────────────────────
+// An unpaid visitor gets exactly ONE section of prose: "the roles you THINK
+// you play vs the roles you ACTUALLY play" (lib/prompt.ts step 4). It's the
+// sharpest hook in the report — a real contrast grounded in specific
+// incidents — so it's the one that earns the click.
+
+/** Matches the roles heading across the languages the app ships in (EN
+ * "roles", ES/FR "roles"/"rôles", DE/NL "Rollen"/"rollen"). Non-matching
+ * languages fall through to the positional lookup below, which is correct
+ * by spec regardless of language. */
+const ROLES_HEADING = /^##[^\n]*\brôl|^##[^\n]*\brol/i;
+
+/**
+ * Returns the section to show as the free teaser, or null if the report has
+ * no sections at all. Heading match first (survives the model reordering
+ * sections), positional second (survives any language): lib/prompt.ts
+ * mandates cold open → central metaphor → roles, so roles is the third
+ * chunk when a cold open exists and the second when it doesn't.
+ */
+export function pickTeaserSection(sections: string[]): string | null {
+  if (sections.length === 0) return null;
+
+  const byHeading = sections.find((section) => ROLES_HEADING.test(section));
+  if (byHeading) return byHeading;
+
+  const hasColdOpen = !sections[0].startsWith("##");
+  return sections[hasColdOpen ? 2 : 1] ?? sections[0];
+}
+
+/**
+ * Trims the teaser to a bounded slice before it's ever sent to the browser.
+ * The card only reveals a few hundred pixels of it, but without this the
+ * whole section would sit in the page source for anyone who opened
+ * devtools — and if the model ever emits a report with no H2 headings at
+ * all, "one section" IS the entire report. Cuts on a paragraph boundary,
+ * and never mid-```chat fence (an unclosed fence would swallow the rest of
+ * the markdown into a code block).
+ */
+export function clampTeaser(section: string, maxChars = 1600): string {
+  if (section.length <= maxChars) return section;
+
+  let cut = section.slice(0, maxChars);
+
+  // Back off to the last paragraph break, then any line break, so the
+  // visible text never ends mid-sentence in the blurred zone.
+  const lastBreak = Math.max(cut.lastIndexOf("\n\n"), cut.lastIndexOf("\n"));
+  if (lastBreak > maxChars * 0.5) cut = cut.slice(0, lastBreak);
+
+  // An odd number of fences means we cut inside a ```chat block — drop back
+  // to before it opened.
+  const fences = cut.match(/```/g)?.length ?? 0;
+  if (fences % 2 !== 0) cut = cut.slice(0, cut.lastIndexOf("```"));
+
+  return cut.trimEnd();
+}

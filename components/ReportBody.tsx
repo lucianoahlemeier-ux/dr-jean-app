@@ -5,19 +5,19 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { persona } from "@/lib/persona";
 
-// Renders the report as a stack of cards — one per section (lib/prompt.ts'
-// mandated H2 structure, cut by lib/reportPreview.ts' splitReportSections).
+// The report body, in two shapes:
 //
-// Paid reports: every card renders fully, same as before but visually
-// chunked instead of one long unbroken scroll.
+//   <ReportBody>   paid — every section as its own card, all fully readable.
+//   <ReportTeaser> free — ONE section (the "roles you think you play vs the
+//                  roles you actually play" hook, picked by
+//                  lib/reportPreview.ts' pickTeaserSection), clipped to a
+//                  fixed height, its lower half dissolving into a smooth
+//                  progressive blur with the unlock card sitting on top.
+//                  The page ends there.
 //
-// Unpaid reports: the first couple of cards render fully (the hook), then
-// each following card gets progressively more locked — a light gradient
-// blur that still lets the opening lines read, then stronger, then a card
-// that's essentially solid — so scrolling down reads as sinking into the
-// lock rather than hitting one flat blurred wall. The stack ends in a plain,
-// fully-legible unlock card (replaces the old floating overlay-on-blur,
-// which looked like a broken page rather than a paywall).
+// The page picks ONE of them (app/r/[token]/page.tsx) — the unpaid branch is
+// never handed the full section list, so the locked prose never reaches the
+// browser at all, not even blurred in the page source.
 //
 // ChatQuote and markdownComponents live in THIS file, not the (server
 // component) report page, on purpose: React Server Components can't pass
@@ -28,8 +28,8 @@ import { persona } from "@/lib/persona";
 // "Error: Functions cannot be passed directly to Client Components..." —
 // this exact function was being passed in as a `components` prop before.)
 
-const FREE_FULL_SECTIONS = 2; // cold open + first section, shown completely
-const FREE_TEASER_SECTIONS = 3; // additional cards, increasingly blurred
+const CARD =
+  "rounded-2xl border border-ink/10 bg-white/70 p-6 shadow-card sm:p-8";
 
 /**
  * Renders a "```chat" fenced block (lib/prompt.ts quote convention) as
@@ -107,14 +107,55 @@ const markdownComponents = {
   },
 };
 
-export function ReportBody({
-  sections,
-  isPaid,
+function Markdown({ children }: { children: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {children}
+    </ReactMarkdown>
+  );
+}
+
+/** Paid view: the whole report, one card per section. */
+export function ReportBody({ sections }: { sections: string[] }) {
+  return (
+    <div className="flex flex-col gap-5">
+      {sections.map((section, i) => (
+        <div key={i} className={`report-prose ${CARD}`}>
+          <Markdown>{section}</Markdown>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// A single uniform blur reads as a grey smudge pasted over the text. Real
+// depth-of-field ramps, so this stacks six thin layers instead: each one
+// starts a little lower down the card and blurs about twice as hard as the
+// one before it. Because a layer's backdrop includes the layers already
+// painted beneath it, the blur compounds down the card into one continuous
+// gradient with no visible banding or seam. (Each step is also strong
+// enough to stand alone, so the effect degrades gracefully to "blurred at
+// the bottom" if a browser declines to compose them.)
+const BLUR_LAYERS = [
+  { blur: 0.7, from: 30, to: 44 },
+  { blur: 1.4, from: 38, to: 52 },
+  { blur: 2.8, from: 46, to: 60 },
+  { blur: 5.6, from: 54, to: 70 },
+  { blur: 11, from: 62, to: 80 },
+  { blur: 20, from: 70, to: 90 },
+];
+
+// bg-white/70 over the cream page background — the colour the text has to
+// dissolve INTO for the clipped bottom edge to be invisible.
+const CARD_SURFACE = "255, 253, 251";
+
+/** Free view: one section, fading into the lock. */
+export function ReportTeaser({
+  markdown,
   token,
   priceLabel,
 }: {
-  sections: string[];
-  isPaid: boolean;
+  markdown: string;
   token: string;
   priceLabel: string;
 }) {
@@ -137,43 +178,56 @@ export function ReportBody({
     }
   }
 
-  // Guards the (rare, malformed-output) case where the model produced too
-  // few H2 sections to gate anything — never let "nothing to lock" mean
-  // "show the unpaid visitor the entire report".
-  const fullCount =
-    sections.length <= 1 ? sections.length : Math.min(FREE_FULL_SECTIONS, sections.length - 1);
-  const isLocked = !isPaid;
-  const visibleSections = isLocked
-    ? sections.slice(0, fullCount + FREE_TEASER_SECTIONS)
-    : sections;
-
   return (
-    <div className="flex flex-col gap-5">
-      {visibleSections.map((section, i) => {
-        const locked = isLocked && i >= fullCount;
-        const depth = locked ? i - fullCount : -1;
-        return (
-          <ReportCard key={i} locked={locked} depth={depth}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-              {section}
-            </ReactMarkdown>
-          </ReportCard>
-        );
-      })}
+    <div className="relative">
+      <div
+        className={`report-prose relative overflow-hidden ${CARD}`}
+        style={{ maxHeight: "min(72vh, 36rem)" }}
+      >
+        <Markdown>{markdown}</Markdown>
 
-      {isLocked && (
-        <div className="rounded-2xl border border-ink/10 bg-cream/95 p-6 text-center shadow-card sm:p-8">
-          <p className="font-serif text-xl text-ink">
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          {BLUR_LAYERS.map((layer, i) => {
+            const mask = `linear-gradient(to bottom, transparent ${layer.from}%, black ${layer.to}%, black 100%)`;
+            return (
+              <div
+                key={i}
+                className="absolute inset-0"
+                style={{
+                  backdropFilter: `blur(${layer.blur}px)`,
+                  WebkitBackdropFilter: `blur(${layer.blur}px)`,
+                  maskImage: mask,
+                  WebkitMaskImage: mask,
+                }}
+              />
+            );
+          })}
+
+          {/* Colour wash on top of the blur — without it the card would end
+              on a hard clipped edge mid-sentence. With it, the prose simply
+              runs out of light. */}
+          <div
+            className="absolute inset-x-0 bottom-0 h-3/4"
+            style={{
+              background: `linear-gradient(to bottom, rgba(${CARD_SURFACE}, 0) 0%, rgba(${CARD_SURFACE}, 0.4) 45%, rgba(${CARD_SURFACE}, 0.86) 78%, rgb(${CARD_SURFACE}) 100%)`,
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="absolute inset-x-0 bottom-0 flex justify-center px-3 pb-5 sm:pb-7">
+        <div className="unlock-rise w-full max-w-sm rounded-2xl border border-ink/10 bg-cream/95 p-5 text-center shadow-soft backdrop-blur-sm sm:p-6">
+          <p className="font-serif text-lg text-ink sm:text-xl">
             The rest is behind a lock, sorry
           </p>
-          <p className="mt-2 text-sm text-ink-soft">
+          <p className="mt-2 text-sm leading-snug text-ink-soft">
             The central tension, the leaderboard, and the one serious thing{" "}
             {persona.name} won&apos;t say for free.
           </p>
           <button
             onClick={unlock}
             disabled={loading}
-            className="mt-5 w-full rounded-full px-6 py-3 font-serif text-lg shadow-soft disabled:opacity-60 sm:w-auto sm:px-10"
+            className="mt-4 w-full rounded-full px-6 py-3 font-serif text-lg shadow-soft transition-transform duration-200 hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
             style={{ background: "var(--accent)", color: "var(--accent-fg)" }}
           >
             {loading ? "Redirecting…" : `Unlock full report — ${priceLabel}`}
@@ -183,62 +237,7 @@ export function ReportBody({
             One-time payment. Secure checkout via Stripe.
           </p>
         </div>
-      )}
-    </div>
-  );
-}
-
-// Each step blurs sooner (mask goes opaque earlier) and harder (stronger
-// backdrop-blur) than the last, so depth 0 is a teaser — its first lines
-// stay legible before the card fades into blur — and by depth 2 the card
-// is blurred almost from the top. The mask sits on a separate absolutely-
-// positioned overlay with its own backdrop-blur, not on the text itself:
-// that's what makes the blur *gradient* (fading in) rather than a uniform
-// filter over the whole card.
-const BLUR_STEPS = [
-  {
-    backdrop: "backdrop-blur-sm",
-    mask: "linear-gradient(to bottom, transparent, transparent 38%, black 80%)",
-  },
-  {
-    backdrop: "backdrop-blur-md",
-    mask: "linear-gradient(to bottom, transparent, black 45%)",
-  },
-  {
-    backdrop: "backdrop-blur-lg",
-    mask: "linear-gradient(to bottom, transparent, black 15%)",
-  },
-];
-
-function ReportCard({
-  children,
-  locked,
-  depth,
-}: {
-  children: ReactNode;
-  locked: boolean;
-  depth: number;
-}) {
-  const card = "rounded-2xl border border-ink/10 bg-white/70 p-6 shadow-card sm:p-8";
-
-  if (!locked) {
-    return <div className={`report-prose ${card}`}>{children}</div>;
-  }
-
-  const step = BLUR_STEPS[Math.min(depth, BLUR_STEPS.length - 1)];
-  return (
-    <div
-      aria-hidden
-      className={`relative select-none overflow-hidden ${card}`}
-    >
-      <div className="report-prose">{children}</div>
-      <div
-        className={`pointer-events-none absolute inset-0 ${step.backdrop}`}
-        style={{
-          maskImage: step.mask,
-          WebkitMaskImage: step.mask,
-        }}
-      />
+      </div>
     </div>
   );
 }
