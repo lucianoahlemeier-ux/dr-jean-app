@@ -39,20 +39,45 @@ export async function POST(req: Request) {
     const session = event.data.object as Stripe.Checkout.Session;
     const token = session.metadata?.token;
 
-    if (token) {
-      const supabase = getSupabase();
-      await supabase
-        .from("reports")
-        .update({
-          paid: true,
-          paid_at: new Date().toISOString(),
-          stripe_payment_intent_id:
-            typeof session.payment_intent === "string"
-              ? session.payment_intent
-              : null,
-        })
-        .eq("token", token);
+    if (!token) {
+      // Nothing to unlock — log it rather than silently 200, because it
+      // means a session was created without the metadata the unlock needs.
+      console.error(
+        `[stripe] checkout.session.completed with no metadata.token (session ${session.id})`,
+      );
+      return NextResponse.json({ received: true });
     }
+
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from("reports")
+      .update({
+        paid: true,
+        paid_at: new Date().toISOString(),
+        stripe_payment_intent_id:
+          typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : null,
+      })
+      .eq("token", token);
+
+    // This used to be a bare `await` whose result was thrown away, so a
+    // failed write still answered Stripe with 200 "received" — the customer
+    // stayed locked out, Stripe considered the event delivered and never
+    // retried, and nothing was logged anywhere. Returning 500 makes Stripe
+    // retry with backoff, and puts the reason in the function logs.
+    if (error) {
+      console.error(
+        `[stripe] failed to mark report paid (session ${session.id}):`,
+        error.message,
+      );
+      return NextResponse.json(
+        { error: "Could not record payment" },
+        { status: 500 },
+      );
+    }
+
+    console.log(`[stripe] marked report paid (session ${session.id})`);
   }
 
   return NextResponse.json({ received: true });

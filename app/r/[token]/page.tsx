@@ -6,6 +6,7 @@ import { ShareBar } from "@/components/ShareBar";
 import { ReportBody, ReportTeaser } from "@/components/ReportBody";
 import { CheckoutSyncing } from "@/components/CheckoutSyncing";
 import { getSupabase } from "@/lib/supabase";
+import { reconcilePaidStatus } from "@/lib/checkoutStatus";
 import { persona } from "@/lib/persona";
 import { formatPrice } from "@/lib/pricing";
 import {
@@ -53,7 +54,7 @@ export default async function ReportPage({
   const { data, error } = await supabase
     .from("reports")
     .select(
-      "status, report_markdown, chat_title, cover_image_url, message_count, paid",
+      "status, report_markdown, chat_title, cover_image_url, message_count, paid, stripe_session_id",
     )
     .eq("token", params.token)
     .single();
@@ -86,7 +87,13 @@ export default async function ReportPage({
   const base = process.env.NEXT_PUBLIC_APP_URL || "";
   const url = `${base}/r/${params.token}`;
   const { title, body } = splitTitle(data.report_markdown);
-  const isPaid = data.paid === true;
+  // If the row says unpaid but a checkout session exists, ask Stripe whether
+  // that session was actually paid — the webhook is the primary path, this
+  // is the safety net for when it doesn't land (see lib/checkoutStatus.ts).
+  const isPaid =
+    data.paid === true ||
+    (!!data.stripe_session_id &&
+      (await reconcilePaidStatus(params.token, data.stripe_session_id)));
   const headlineStats = isPaid ? null : extractHeadlineStats(body);
   const showCheckoutSyncing = !isPaid && searchParams?.checkout === "success";
   const sections = splitReportSections(body);

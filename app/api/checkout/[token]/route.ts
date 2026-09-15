@@ -81,12 +81,23 @@ export async function POST(
       );
     }
 
-    // Best-effort — useful for reconciliation in the Stripe dashboard, not
-    // required for the unlock itself (the webhook is the source of truth).
-    await supabase
+    // NOT best-effort any more. lib/checkoutStatus.ts uses this id to ask
+    // Stripe "was this session paid?" when the webhook hasn't marked the
+    // report — so if this write is lost, that safety net has nothing to go
+    // on and a paying customer's only route back is the webhook working.
+    // Still not fatal to checkout (better to let someone pay and reconcile
+    // later than to block the sale), but it must be visible in the logs.
+    const { error: sessionIdError } = await supabase
       .from("reports")
       .update({ stripe_session_id: session.id })
       .eq("token", params.token);
+
+    if (sessionIdError) {
+      console.error(
+        `[checkout] could not store session id ${session.id} for token ${params.token}:`,
+        sessionIdError.message,
+      );
+    }
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
