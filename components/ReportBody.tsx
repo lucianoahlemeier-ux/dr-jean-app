@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ComponentProps, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { persona } from "@/lib/persona";
@@ -18,23 +18,105 @@ import { persona } from "@/lib/persona";
 // lock rather than hitting one flat blurred wall. The stack ends in a plain,
 // fully-legible unlock card (replaces the old floating overlay-on-blur,
 // which looked like a broken page rather than a paywall).
-type MarkdownComponents = ComponentProps<typeof ReactMarkdown>["components"];
+//
+// ChatQuote and markdownComponents live in THIS file, not the (server
+// component) report page, on purpose: React Server Components can't pass
+// raw functions as props into a Client Component ("use client", like this
+// file) — only as pre-rendered children. Defining them here, and
+// instantiating ReactMarkdown here too, keeps everything function-shaped on
+// the client side of that boundary. (Confirmed via a real prod crash:
+// "Error: Functions cannot be passed directly to Client Components..." —
+// this exact function was being passed in as a `components` prop before.)
 
 const FREE_FULL_SECTIONS = 2; // cold open + first section, shown completely
 const FREE_TEASER_SECTIONS = 3; // additional cards, increasingly blurred
+
+/**
+ * Renders a "```chat" fenced block (lib/prompt.ts quote convention) as
+ * WhatsApp-style bubbles: one bubble per run of consecutive same-sender
+ * lines, tinted with the persona's accent. Sender labels only show when a
+ * block has more than one speaker (a back-and-forth) — matching the
+ * reference, where a single-speaker quote has no visible label because the
+ * surrounding prose already names who's talking.
+ */
+function ChatQuote({ text }: { text: string }) {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const groups: { sender: string; lines: string[] }[] = [];
+
+  for (const line of lines) {
+    const match = line.match(/^([^:]+):\s?(.*)$/);
+    if (!match) continue; // malformed line — skip rather than mis-render
+    const [, rawSender, body] = match;
+    const sender = rawSender.trim();
+    const last = groups[groups.length - 1];
+    if (last && last.sender === sender) {
+      last.lines.push(body);
+    } else {
+      groups.push({ sender, lines: [body] });
+    }
+  }
+
+  if (groups.length === 0) return null;
+  const multiParty = new Set(groups.map((g) => g.sender)).size > 1;
+
+  return (
+    <div className="my-5 flex flex-col gap-3">
+      {groups.map((group, i) => (
+        <div key={i}>
+          {multiParty && (
+            <div className="mb-1 ml-1 text-xs font-medium text-ink-soft">
+              {group.sender}
+            </div>
+          )}
+          <div
+            className="inline-block max-w-[85%] rounded-2xl rounded-bl-md px-4 py-2.5 font-sans"
+            style={{
+              background: "color-mix(in srgb, var(--accent) 12%, white)",
+            }}
+          >
+            {group.lines.map((line, j) => (
+              <p
+                key={j}
+                className="text-[0.95rem] leading-snug text-ink"
+                style={{ margin: j === 0 ? 0 : "0.3rem 0 0" }}
+              >
+                {line}
+                {j === group.lines.length - 1 && (
+                  <span className="ml-1.5 align-middle text-[0.7rem] text-sky-600">
+                    ✓✓
+                  </span>
+                )}
+              </p>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const markdownComponents = {
+  pre({ children }: { children?: ReactNode }) {
+    return <>{children}</>;
+  },
+  code({ className, children }: { className?: string; children?: ReactNode }) {
+    if (/language-chat/.test(className || "")) {
+      return <ChatQuote text={String(children).replace(/\n$/, "")} />;
+    }
+    return <code className={className}>{children}</code>;
+  },
+};
 
 export function ReportBody({
   sections,
   isPaid,
   token,
   priceLabel,
-  components,
 }: {
   sections: string[];
   isPaid: boolean;
   token: string;
   priceLabel: string;
-  components: MarkdownComponents;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +154,7 @@ export function ReportBody({
         const depth = locked ? i - fullCount : -1;
         return (
           <ReportCard key={i} locked={locked} depth={depth}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
               {section}
             </ReactMarkdown>
           </ReportCard>
