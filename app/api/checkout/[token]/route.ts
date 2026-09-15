@@ -55,6 +55,15 @@ export async function POST(
               name: `${persona.name}'s full report${
                 data.chat_title ? ` — ${data.chat_title}` : ""
               }`,
+              // Required once "Managed Payments" is enabled on the Stripe
+              // account (on by default for new accounts) — without it,
+              // Checkout session creation throws "the product tax code is
+              // missing" and the unlock button surfaces a raw Stripe error.
+              // txcd_10000000 is Stripe's generic "General - Electronically
+              // Supplied Services" code, the right bucket for a digital,
+              // non-physical report unlock. See
+              // https://docs.stripe.com/tax/tax-categories
+              tax_code: "txcd_10000000",
             },
           },
         },
