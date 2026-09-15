@@ -102,6 +102,18 @@ cp .env.example .env.local   # then fill it in (see below)
   [Stripe CLI](https://stripe.com/docs/stripe-cli) instead:
   `stripe listen --forward-to localhost:3000/api/stripe/webhook` (it prints a
   `whsec_...` to use locally).
+  > **Register the endpoint in the same environment you're testing in.** A
+  > sandbox/test payment does not deliver to an endpoint registered in live
+  > mode, and the failure is silent — checkout succeeds and the report just
+  > never unlocks. (The reconcile in `lib/checkoutStatus.ts` covers for this,
+  > so the symptom is "unlocks only after a page load" rather than "never
+  > unlocks" — easy to miss.)
+- **API version:** Managed Payments is enabled by default on new accounts and
+  needs API version `2025-03-31.basil` or later, so `lib/stripe.ts` pins
+  `2025-08-27.basil` explicitly. It also requires a `tax_code` on the product,
+  which `app/api/checkout/[token]` sets. Don't drop either without testing a
+  real checkout — both produce a 500 at session creation, surfaced as a raw
+  Stripe error under the unlock button.
 - `REPORT_PRICE_CENTS` (optional) — price to unlock one report, in cents.
   Defaults to `499` ($4.99).
 - If you already have a live Supabase database (created before the paywall
@@ -130,9 +142,12 @@ npx inngest-cli@latest dev -u http://localhost:3000/api/inngest
 ```
 
 Open <http://localhost:3000>, click **Get the Report**, and walk the wizard. For
-the upload step, use a real WhatsApp export (**Export chat → Without media**),
-or the bundled sample [`sample/_chat.txt`](sample/_chat.txt) (zip it first, or
-upload the `.txt` directly — both are accepted).
+the upload step, use a WhatsApp export of your own (**Export chat → Without
+media**) — either the `.zip` or the `.txt` inside it, both are accepted. Drop it
+at `sample/_chat.txt` if you want it handy for repeat runs; `.gitignore` covers
+`_chat.txt` so a real conversation can't be committed to this public repo by
+accident. Nothing is bundled — a sample export would be somebody's actual
+private chat.
 
 You'll land on a status screen; once the Inngest job finishes, it redirects to
 your report at `/r/{token}`.
@@ -162,15 +177,36 @@ WhatsApp-only, Classic Report only, email-only delivery. Shown but **not built**
 (marked "coming soon"): iMessage, the Deep Report / Mirror tiers, accounts.
 These are intentional TODOs, not omissions.
 
-**The paywall:** every report is generated in full, but an unpaid visitor at
-`/r/{token}` sees only the "star review" headline stats — dimension names +
-star ratings, no written analysis — with the rest of the report blurred
-behind an "Unlock full report" card. Paying via Stripe Checkout (one-time,
-no account) flips a `paid` flag on that report's row via the
-`checkout.session.completed` webhook, and the token URL then always shows
-the full report. See [`components/PaywallGate.tsx`](components/PaywallGate.tsx),
-[`lib/reportPreview.ts`](lib/reportPreview.ts), and
-[`app/api/stripe/webhook`](app/api/stripe/webhook/route.ts).
+**The paywall:** every report is generated in full. An unpaid visitor at
+`/r/{token}` gets the "star review" headline stats (dimension names + star
+ratings) and **one** section of prose — "the roles you THINK you play vs the
+roles you ACTUALLY play", the sharpest hook in the report — in a card whose
+lower half dissolves into a progressive blur with the unlock card on top.
+The page ends there: no sign-off, no share bar, no "get another report"
+pitch competing with the CTA. Paying via Stripe Checkout (one-time, no
+account) sets a `paid` flag on that report's row, and the token URL then
+always shows the full report.
+
+Only the teaser section is sent to an unpaid browser — the locked prose
+isn't in the page source, blurred or otherwise. See
+[`components/ReportBody.tsx`](components/ReportBody.tsx) and
+[`lib/reportPreview.ts`](lib/reportPreview.ts).
+
+**Two paths set `paid`, and both ask Stripe:**
+
+1. The [`checkout.session.completed` webhook](app/api/stripe/webhook/route.ts)
+   — the primary path, and the only one that works if the buyer closes the
+   tab the instant they've paid.
+2. [`lib/checkoutStatus.ts`](lib/checkoutStatus.ts) — when the report page
+   renders a report that's unpaid but has a checkout session against it, it
+   retrieves that session from Stripe and writes the flag if it was paid.
+
+The second exists because the first used to be the only one, and the first
+real payment through this flow didn't unlock: money taken, report still
+locked, no way out. A webhook that doesn't land (wrong environment, stale
+signing secret, transient DB error) must not be able to strand a paying
+customer. Neither path trusts the `?checkout=success` query param — anyone
+can type that — only Stripe's own answer, server-side.
 
 ---
 
@@ -190,7 +226,8 @@ app/
   api/checkout/[token]     creates a Stripe Checkout session to unlock a report
   api/stripe/webhook       marks a report paid on checkout.session.completed
 components/
-  PaywallGate.tsx          blurs the report body + the unlock card
+  ReportBody.tsx           the report as cards: all of them if paid, else the
+                           one teaser section fading into the unlock card
   CheckoutSyncing.tsx      brief "unlocking…" poll right after Stripe redirects back
 lib/
   persona.ts               ← the brand. fill this in.
@@ -198,12 +235,15 @@ lib/
   whatsapp.ts              defensive WhatsApp export parser
   generate.ts              the single Claude call
   inngest/                 client + the generation job
-  reportPreview.ts         pulls the free "headline stats" teaser out of the report
+  reportPreview.ts         splits the report into sections + picks/clamps the
+                           free teaser (headline stats + the "roles" section)
+  checkoutStatus.ts        asks Stripe whether a session was paid, when the
+                           webhook hasn't marked the report
   pricing.ts, stripe.ts    paywall price + server-only Stripe client
   supabase.ts, email.ts, types.ts
 supabase/schema.sql        DB + buckets
 supabase/migrations/       one-off ALTERs for databases created before a feature shipped
-sample/_chat.txt           a sample export to test against
+sample/_chat.txt           your own export to test against (gitignored, not bundled)
 ```
 
 ---

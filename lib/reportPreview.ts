@@ -1,9 +1,13 @@
-// The free, pre-paywall teaser. Per the product decision, unpaid visitors see
-// ONLY headline stats — no written analysis — so we pull just the star
-// ratings (and the closing bolded verdict) out of the "star review" section
-// the persona prompt always produces (lib/prompt.ts, step 8), stripped of
-// their one-line justifications. Everything else in the report body stays
-// blurred behind the paywall (see components/ReportBody.tsx).
+// The free, pre-paywall teaser: headline stats (below) plus exactly one
+// section of prose (see pickTeaserSection further down). The stats are the
+// star ratings — and the closing bolded verdict — pulled out of the "star
+// review" section the persona prompt always produces (lib/prompt.ts, step 8),
+// stripped of their one-line justifications.
+//
+// Originally the stats were the WHOLE free teaser and the rest of the report
+// was rendered blurred. That shipped the entire locked report to every
+// visitor's browser, readable in devtools by anyone who cared. Nothing beyond
+// the clamped teaser is sent now — see components/ReportBody.tsx.
 
 export interface HeadlineStat {
   /** e.g. "⭐⭐⭐⭐" */
