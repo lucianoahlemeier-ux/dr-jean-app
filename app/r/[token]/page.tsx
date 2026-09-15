@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
@@ -17,6 +18,54 @@ import {
 } from "@/lib/reportPreview";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Two jobs.
+ *
+ * 1. Keep these URLs OUT of search engines. A report token is the only thing
+ *    protecting a private read of someone's group chat — if one of these
+ *    links ever gets posted somewhere public, "private link" must not quietly
+ *    become "indexed by Google". noindex costs nothing and is very hard to
+ *    retrofit once it has happened.
+ * 2. Make the share worth clicking. People paste these back into the chat
+ *    the report is about, so the preview leads with the group's own name
+ *    rather than a bare URL. Selects only chat_title — pulling the whole
+ *    report_markdown just to build a title would double the page's DB cost
+ *    for one line of text.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: { token: string };
+}): Promise<Metadata> {
+  const robots = { index: false, follow: false };
+
+  let chatTitle: string | null = null;
+  try {
+    const { data } = await getSupabase()
+      .from("reports")
+      .select("chat_title")
+      .eq("token", params.token)
+      .single();
+    chatTitle = data?.chat_title ?? null;
+  } catch {
+    // A metadata lookup must never take the page down — fall back to the
+    // generic title and let the page itself handle a missing report.
+  }
+
+  const title = chatTitle
+    ? `${persona.name} read "${chatTitle}" 👀`
+    : `${persona.name} read our chat 👀`;
+  const description = `${persona.name} went through the whole thing and wrote a report. ${persona.tagline}`;
+
+  return {
+    title,
+    description,
+    robots,
+    openGraph: { type: "article", title, description },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
 
 // The report page at a private token URL (docs/05, docs/03). Layout matches
 // `report reference/Screenshot *.png`: a badge, the model's title rendered

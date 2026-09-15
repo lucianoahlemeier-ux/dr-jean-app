@@ -6,9 +6,17 @@ import {
   COVERS_BUCKET,
 } from "@/lib/supabase";
 import { inngest } from "@/lib/inngest/client";
+import { checkRateLimit, clientIp } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+/** Hard ceiling on the upload. Vercel caps a serverless request body around
+ * 4.5MB anyway, so this mostly exists to fail with a sentence a human can act
+ * on instead of a platform-level error page. A WhatsApp export without media
+ * is plain text and compresses hard — 4MB of zip is a chat far larger than
+ * anything this is priced to read. */
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 // The upload route (docs/02): FAST. It validates + stashes the raw file in
 // temporary storage, creates the report row (status=queued), enqueues the
@@ -43,6 +51,32 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "Only WhatsApp is supported in this version" },
         { status: 400 },
+      );
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(
+        {
+          error:
+            "That export is too large to read. Export the chat again with " +
+            "“Without media” — that keeps it to text and makes it much smaller.",
+        },
+        { status: 413 },
+      );
+    }
+
+    // Spend guard — see lib/rateLimit.ts. Checked BEFORE anything is stored
+    // or enqueued, so a blocked request costs a single indexed count query
+    // and nothing else.
+    const limit = await checkRateLimit(clientIp(req), email);
+    if (!limit.ok) {
+      console.warn(`[generate] rate limited (${limit.reason})`);
+      return NextResponse.json(
+        {
+          error:
+            "You've made a lot of reports today. Try again tomorrow — or " +
+            "get in touch if you genuinely need more.",
+        },
+        { status: 429 },
       );
     }
 

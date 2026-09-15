@@ -116,6 +116,9 @@ cp .env.example .env.local   # then fill it in (see below)
   Stripe error under the unlock button.
 - `REPORT_PRICE_CENTS` (optional) — price to unlock one report, in cents.
   Defaults to `499` ($4.99).
+- Existing database? Run [`supabase/migrations/0002_rate_limit.sql`](supabase/migrations/0002_rate_limit.sql)
+  too — it creates the counter table behind the spend guards below. A fresh
+  `supabase/schema.sql` already includes it.
 - If you already have a live Supabase database (created before the paywall
   shipped), run [`supabase/migrations/0001_add_paywall.sql`](supabase/migrations/0001_add_paywall.sql)
   once in the SQL editor — it's just `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`,
@@ -210,6 +213,34 @@ can type that — only Stripe's own answer, server-side.
 
 ---
 
+## Spend guards (read before opening this to the public)
+
+`/api/generate` takes no authentication, and every call it accepts enqueues a
+job that calls Claude over an entire transcript. Because reports are generated
+**in full before the paywall**, that money is spent whether or not anyone ever
+pays — so an open endpoint is an open tab on your Anthropic bill. Three limits
+bound it, all tunable in `.env`:
+
+| Guard | Where | Default |
+|---|---|---|
+| Upload size | `app/api/generate` | 4MB (Vercel caps the body near this anyway) |
+| Reports per day, per IP / per email | [`lib/rateLimit.ts`](lib/rateLimit.ts) | 10 / 5 |
+| Transcript size worth paying to read | [`lib/chunking.ts`](lib/chunking.ts) | 2,000,000 est. tokens |
+
+The rate limiter counts in Postgres rather than memory on purpose: serverless
+spreads requests across instances that share none, so an in-memory counter
+bounds one warm instance and nothing else — protection that tests fine and
+isn't there when it matters. It stores salted hashes, never raw IPs or emails,
+and **fails open** if its own table misbehaves (a limiter that takes the
+product down has caused a worse outage than the abuse it was guarding against
+— watch the logs for `[ratelimit]`).
+
+`MAX_TRANSCRIPT_TOKENS` is a business number, not a technical one. Measure
+what a report at that size actually costs against what you charge, and set it
+from that.
+
+---
+
 ## Project layout
 
 ```
@@ -239,6 +270,7 @@ lib/
                            free teaser (headline stats + the "roles" section)
   checkoutStatus.ts        asks Stripe whether a session was paid, when the
                            webhook hasn't marked the report
+  rateLimit.ts             per-IP / per-email daily caps on /api/generate
   pricing.ts, stripe.ts    paywall price + server-only Stripe client
   supabase.ts, email.ts, types.ts
 supabase/schema.sql        DB + buckets

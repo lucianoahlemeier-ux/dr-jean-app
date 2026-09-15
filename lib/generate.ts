@@ -64,8 +64,25 @@ type GenMode = "claude-code" | "api" | "mock";
  * (claude-code mode spawns real CLI subprocesses and must stay bounded;
  * api mode can run wider) without duplicating GEN_MODE parsing/validation. */
 export function getGenMode(): GenMode {
-  const raw = (process.env.GEN_MODE || "claude-code").trim();
-  if (raw === "claude-code" || raw === "api" || raw === "mock") return raw;
+  // The default is environment-dependent on purpose. "claude-code" shells out
+  // to the local `claude` CLI, which is the right convenience for a dev
+  // machine and cannot possibly work on a serverless host — there is no CLI
+  // and no login there. Defaulting to it everywhere meant a deploy that
+  // forgot to set GEN_MODE failed deep inside the job with "Claude Code CLI
+  // not found", minutes after upload, looking like a generation bug rather
+  // than a missing env var. In production the only sane default is the API.
+  const fallback = process.env.NODE_ENV === "production" ? "api" : "claude-code";
+  const raw = (process.env.GEN_MODE || fallback).trim();
+  if (raw === "claude-code" || raw === "api" || raw === "mock") {
+    if (raw === "claude-code" && process.env.NODE_ENV === "production") {
+      throw new Error(
+        'GEN_MODE="claude-code" cannot work in production — it shells out to ' +
+          "the local `claude` CLI, which doesn't exist on the server. Set " +
+          'GEN_MODE="api" and provide ANTHROPIC_API_KEY.',
+      );
+    }
+    return raw;
+  }
   throw new Error(
     `Invalid GEN_MODE "${raw}" — expected "claude-code", "api", or "mock".`,
   );

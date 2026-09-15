@@ -57,6 +57,26 @@ export const CHUNK_BUDGET_TOKENS = 90_000;
 export const SINGLE_CALL_MAX_TOKENS = 700_000;
 
 /**
+ * Spend ceiling (TOKENS): the largest transcript we're willing to pay to
+ * read. Unlike the byte cap on the upload route, this tracks actual cost —
+ * a zipped text export compresses ~10x, so file size says almost nothing
+ * about the bill, while estimated tokens is close to proportional to it.
+ *
+ * Above this the job fails fast with a message the user can act on, instead
+ * of quietly fanning out into dozens of chunk calls against a report that
+ * sells for a fixed price. Reports are generated BEFORE the paywall, so an
+ * enormous chat is spend with no guaranteed revenue behind it.
+ *
+ * The default is deliberately generous — it comfortably covers years of an
+ * active group chat — but it is a business number, not a technical one:
+ * measure what a report at this size actually costs you against what you
+ * charge, and set MAX_TRANSCRIPT_TOKENS from that.
+ */
+export const MAX_TRANSCRIPT_TOKENS = Number(
+  process.env.MAX_TRANSCRIPT_TOKENS ?? 2_000_000,
+);
+
+/**
  * Rough token estimate for a string, without pulling in a real tokenizer.
  * Calibrated against a real WhatsApp export (see constants above): ASCII chars
  * ~0.6 tok/char, non-ASCII (emoji, Persian/Arabic/CJK) ~1 tok/char. Both are

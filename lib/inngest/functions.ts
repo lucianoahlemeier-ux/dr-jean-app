@@ -14,6 +14,7 @@ import {
   estimateTokens,
   CHUNK_BUDGET_TOKENS,
   SINGLE_CALL_MAX_TOKENS,
+  MAX_TRANSCRIPT_TOKENS,
   type ChatChunk,
 } from "../chunking";
 import { sendReportEmail } from "../email";
@@ -171,6 +172,25 @@ export const generateReportFn = inngest.createFunction(
       // English one, and must, or the chunked path never engages when it
       // should (and vice-versa).
       const estimatedTokens = estimateTranscriptTokens(parsed.messages, name_overrides);
+
+      // Spend ceiling (lib/chunking.ts). Checked BEFORE any model call, and
+      // written straight to `failed` rather than thrown: this outcome is
+      // deterministic, so letting Inngest retry it would just re-derive the
+      // same answer while the user waits on the status page.
+      if (estimatedTokens > MAX_TRANSCRIPT_TOKENS) {
+        logStage("rejected-too-large", { estimatedTokens });
+        await supabase
+          .from("reports")
+          .update({
+            status: "failed",
+            error:
+              "This chat is bigger than I can read in one go. Try exporting " +
+              "a shorter stretch of it — a single year, or one busy month.",
+          })
+          .eq("id", reportId);
+        finishRun(reportId);
+        return { ok: false, reportId, reason: "too-large" };
+      }
 
       let report: { report: string; messageCount: number };
 
