@@ -68,7 +68,14 @@ export async function POST(
           },
         },
       ],
-      success_url: `${base}/r/${params.token}?checkout=success`,
+      // {CHECKOUT_SESSION_ID} is substituted by Stripe on redirect, so the
+      // report page learns which session was actually paid rather than
+      // trusting the one stored on the row. That matters because every click
+      // of "Unlock" creates a NEW session and overwrites stripe_session_id —
+      // so someone who opens checkout twice can pay on one session while the
+      // row remembers the other, and the reconcile then asks Stripe about an
+      // abandoned session and leaves a paying customer locked out.
+      success_url: `${base}/r/${params.token}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${base}/r/${params.token}?checkout=cancelled`,
       // The webhook reads this back to know which report to mark paid.
       metadata: { token: params.token },

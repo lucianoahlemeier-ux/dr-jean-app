@@ -42,6 +42,21 @@ export async function reconcilePaidStatus(
     // it — not an error, just nothing to do.
     if (session.payment_status !== "paid") return false;
 
+    // MANDATORY. The session id can arrive from the ?session_id= parameter
+    // Stripe puts on the success redirect, which means it comes from a URL
+    // the visitor controls. Without this check, anyone could buy one report
+    // and then paste that session id onto every other report link they had,
+    // unlocking all of them for $4.99 total. Stripe confirming "this session
+    // was paid" is only half the question; the other half is "paid for THIS
+    // report", and only the metadata we set at creation answers that.
+    if (session.metadata?.token !== token) {
+      console.error(
+        `[checkout] reconcile REFUSED: session ${sessionId} is paid but its ` +
+          `metadata.token does not match the report being unlocked`,
+      );
+      return false;
+    }
+
     const supabase = getSupabase();
     const { error } = await supabase
       .from("reports")

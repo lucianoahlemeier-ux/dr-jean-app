@@ -18,6 +18,12 @@ import {
 } from "@/lib/reportPreview";
 
 export const dynamic = "force-dynamic";
+// Explicit, even though force-dynamic is documented to imply it. This page
+// asks Stripe "was this session paid?" through `fetch`, which Next patches
+// and caches — and a cached "unpaid" answer from before the customer paid
+// would replay on every refresh and never unlock. That exact failure already
+// cost us a day on /api/report/[token]; not relying on an implication here.
+export const fetchCache = "force-no-store";
 
 /**
  * Two jobs.
@@ -136,13 +142,32 @@ export default async function ReportPage({
   const base = process.env.NEXT_PUBLIC_APP_URL || "";
   const url = `${base}/r/${params.token}`;
   const { title, body } = splitTitle(data.report_markdown);
-  // If the row says unpaid but a checkout session exists, ask Stripe whether
-  // that session was actually paid — the webhook is the primary path, this
-  // is the safety net for when it doesn't land (see lib/checkoutStatus.ts).
-  const isPaid =
-    data.paid === true ||
-    (!!data.stripe_session_id &&
-      (await reconcilePaidStatus(params.token, data.stripe_session_id)));
+  // If the row says unpaid, ask Stripe directly — the webhook is the primary
+  // path, this is the safety net for when it doesn't land.
+  //
+  // The session id Stripe puts on the success redirect is tried FIRST,
+  // because it names the session actually paid. The column can be stale: each
+  // click of "Unlock" creates a new session and overwrites it, so someone who
+  // opened checkout twice may have paid on a session the row no longer
+  // remembers. The stored id is the fallback, for someone returning to the
+  // link later without the redirect parameter.
+  //
+  // Safe despite ?session_id= being attacker-controllable: reconcile refuses
+  // any session whose metadata.token doesn't match this report
+  // (lib/checkoutStatus.ts).
+  const redirectSessionId =
+    typeof searchParams?.session_id === "string" ? searchParams.session_id : null;
+  const candidateSessions = [redirectSessionId, data.stripe_session_id].filter(
+    (id): id is string => typeof id === "string" && id.length > 0,
+  );
+
+  let isPaid = data.paid === true;
+  for (const sessionId of isPaid ? [] : [...new Set(candidateSessions)]) {
+    if (await reconcilePaidStatus(params.token, sessionId)) {
+      isPaid = true;
+      break;
+    }
+  }
   const headlineStats = isPaid ? null : extractHeadlineStats(body);
   const showCheckoutSyncing = !isPaid && searchParams?.checkout === "success";
   const sections = splitReportSections(body);
