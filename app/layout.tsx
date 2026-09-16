@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { persona } from "@/lib/persona";
+import { siteUrl } from "@/lib/siteUrl";
 
 // The growth loop of this product is someone pasting a report link back into
 // the group chat it's about. Without these tags that paste renders as a bare
@@ -10,10 +11,8 @@ import { persona } from "@/lib/persona";
 // metadataBase is what lets the relative opengraph-image URL below resolve to
 // an absolute one; without it Next can't build the tag and the preview is
 // silently blank in production.
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: new URL(siteUrl()),
   title: `${persona.name} — AI reads your chat`,
   description: persona.tagline,
   openGraph: {

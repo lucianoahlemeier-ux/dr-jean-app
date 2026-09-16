@@ -3,6 +3,7 @@ import { getSupabase } from "@/lib/supabase";
 import { getStripe } from "@/lib/stripe";
 import { REPORT_PRICE_CENTS } from "@/lib/pricing";
 import { persona } from "@/lib/persona";
+import { siteUrl } from "@/lib/siteUrl";
 
 export const runtime = "nodejs";
 
@@ -32,9 +33,10 @@ export async function POST(
       );
     }
 
-    const base =
-      process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-      new URL(_req.url).origin;
+    // Falls back to the request origin as a last resort: checkout must
+    // work even if nothing is configured, since the alternative is a sale
+    // that cannot be completed.
+    const base = siteUrl() || new URL(_req.url).origin;
 
     // Already paid (e.g. a stale tab, or the webhook beat this click) —
     // nothing to charge, just send them back to the unlocked report.

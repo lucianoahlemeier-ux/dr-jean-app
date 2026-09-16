@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { persona } from "@/lib/persona";
 
 // Sticky-ish share affordance (docs/05) — the whole point is sharing the report
@@ -8,14 +8,32 @@ import { persona } from "@/lib/persona";
 export function ShareBar({ url, title }: { url: string; title?: string | null }) {
   const [copied, setCopied] = useState(false);
 
+  // Last line of defence on the one thing this component exists to do.
+  // lib/siteUrl.ts should always hand down an absolute URL, but when it
+  // didn't — NEXT_PUBLIC_APP_URL unset in production — "Copy link" silently
+  // copied "/r/<token>", which pastes into WhatsApp as a dead string and
+  // looks to the user like the product is broken. The browser always knows
+  // its own origin, so a relative URL is repaired here rather than shipped.
+  //
+  // Set in an effect, not at render: the server has no window, and computing
+  // this during render would make the server and client markup disagree.
+  const [shareUrl, setShareUrl] = useState(url);
+  useEffect(() => {
+    if (!/^https?:\/\//i.test(url)) {
+      setShareUrl(new URL(url, window.location.origin).toString());
+    } else {
+      setShareUrl(url);
+    }
+  }, [url]);
+
   const shareText = title
-    ? `${persona.name} read "${title}" 👀 ${url}`
-    : `${persona.name} read our chat 👀 ${url}`;
+    ? `${persona.name} read "${title}" 👀 ${shareUrl}`
+    : `${persona.name} read our chat 👀 ${shareUrl}`;
   const waHref = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {

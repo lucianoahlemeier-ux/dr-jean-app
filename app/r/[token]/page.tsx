@@ -8,6 +8,7 @@ import { ReportBody, ReportTeaser } from "@/components/ReportBody";
 import { CheckoutSyncing } from "@/components/CheckoutSyncing";
 import { getSupabase } from "@/lib/supabase";
 import { reconcilePaidStatus } from "@/lib/checkoutStatus";
+import { siteUrl } from "@/lib/siteUrl";
 import { persona } from "@/lib/persona";
 import { formatPrice } from "@/lib/pricing";
 import {
@@ -139,8 +140,7 @@ export default async function ReportPage({
     );
   }
 
-  const base = process.env.NEXT_PUBLIC_APP_URL || "";
-  const url = `${base}/r/${params.token}`;
+  const url = `${siteUrl()}/r/${params.token}`;
   const { title, body } = splitTitle(data.report_markdown);
   // If the row says unpaid, ask Stripe directly — the webhook is the primary
   // path, this is the safety net for when it doesn't land.

@@ -18,6 +18,7 @@ import {
   type ChatChunk,
 } from "../chunking";
 import { sendReportEmail } from "../email";
+import { siteUrl } from "../siteUrl";
 import type { ChunkAnalysis } from "../prompt";
 import type { OnboardingAnswers, ParsedTranscript, RelationshipType } from "../types";
 
@@ -283,11 +284,9 @@ export const generateReportFn = inngest.createFunction(
       });
 
       await step.run("send-email", async () => {
-        const base =
-          process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
         await sendReportEmail({
           to: email,
-          reportUrl: `${base}/r/${token}`,
+          reportUrl: `${siteUrl()}/r/${token}`,
           chatTitle: chat_title,
         });
       });
