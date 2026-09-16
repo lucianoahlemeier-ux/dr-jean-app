@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supportEmail } from "@/lib/legal";
 
 // Shown right after a successful Stripe Checkout redirect, for the brief
 // window where the webhook hasn't flipped `paid` yet (webhooks are usually
@@ -41,9 +42,29 @@ export function CheckoutSyncing({ token }: { token: string }) {
 
   return (
     <div className="mx-auto mb-6 w-fit rounded-full border border-ink/15 bg-white/70 px-4 py-2 text-xs text-ink-soft">
-      {gaveUp
-        ? "Payment received. Refresh this page in a moment if it's still locked."
-        : "Payment received — unlocking your report…"}
+      {gaveUp ? (
+        <>
+          Payment received. Refresh this page in a moment if it&apos;s still
+          locked.
+          {/* Someone who has paid and is still looking at a paywall should
+              never have to go hunting for how to reach us. */}
+          {supportEmail() && (
+            <>
+              {" "}
+              Still stuck?{" "}
+              <a
+                href={`mailto:${supportEmail()}?subject=Paid but my report is still locked`}
+                className="underline"
+              >
+                Email us
+              </a>
+              .
+            </>
+          )}
+        </>
+      ) : (
+        "Payment received — unlocking your report…"
+      )}
     </div>
   );
 }

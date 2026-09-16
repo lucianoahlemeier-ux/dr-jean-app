@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Header } from "@/components/Header";
 import { persona } from "@/lib/persona";
+import { SiteFooter } from "@/components/SiteFooter";
+import { supportEmail } from "@/lib/legal";
 
 // Plain privacy policy (docs/02): EU-based, third-party consent note, deletion
 // offer, no retention. Treated as a real constraint, not a footnote.
@@ -9,6 +11,7 @@ export const metadata = {
 };
 
 export default function PrivacyPage() {
+  const email = supportEmail();
   return (
     <main className="min-h-screen">
       <Header />
@@ -43,9 +46,17 @@ export default function PrivacyPage() {
 
           <h2>Deleting a report.</h2>
           <p>
-            Want a report gone? Email us the private link and we&apos;ll delete
-            it. Because we don&apos;t store the underlying chat, there&apos;s
-            nothing else to remove.
+            Want a report gone?{" "}
+            {email ? (
+              <>
+                Email <a href={`mailto:${email}`}>{email}</a> with the private
+                link
+              </>
+            ) : (
+              <>Send us the private link</>
+            )}{" "}
+            and we&apos;ll delete it. Because we don&apos;t store the underlying
+            chat, there&apos;s nothing else to remove.
           </p>
 
           <h2>What we&apos;re built on.</h2>
@@ -63,6 +74,7 @@ export default function PrivacyPage() {
           ← Back home
         </Link>
       </div>
+      <SiteFooter />
     </main>
   );
 }

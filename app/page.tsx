@@ -5,6 +5,7 @@ import { LinkButton } from "@/components/ui";
 import { ReactionStrip } from "@/components/ReactionStrip";
 import { Faq } from "@/components/Faq";
 import { persona } from "@/lib/persona";
+import { SiteFooter } from "@/components/SiteFooter";
 
 // Landing page — matches reference/Site: big playful wordmark hero, one CTA,
 // the reaction "wall of love" strip (the growth engine), a "three ways to get
@@ -112,15 +113,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Footer */}
-        <footer className="border-t border-ink/10 bg-cream">
-          <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 px-5 py-8 text-sm text-ink-soft sm:flex-row">
-            <span>© {new Date().getFullYear()} What {persona.name} Thinks</span>
-            <Link href="/privacy" className="underline hover:text-ink">
-              Privacy &amp; how it works
-            </Link>
-          </div>
-        </footer>
+        <SiteFooter />
       </div>
     </main>
   );

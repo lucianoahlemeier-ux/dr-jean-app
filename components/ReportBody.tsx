@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { persona } from "@/lib/persona";
+import { supportEmail } from "@/lib/legal";
 
 // The report body, in two shapes:
 //
@@ -232,7 +233,25 @@ export function ReportTeaser({
           >
             {loading ? "Redirecting…" : `Unlock full report — ${priceLabel}`}
           </button>
-          {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+          {error && (
+            <p className="mt-3 text-xs text-red-600">
+              {error}
+              {/* A payment error is exactly when someone needs a human, and
+                  it's the worst possible moment to be a dead end. */}
+              {supportEmail() && (
+                <>
+                  {" "}
+                  <a
+                    href={`mailto:${supportEmail()}?subject=Trouble unlocking my report`}
+                    className="underline"
+                  >
+                    Email us
+                  </a>{" "}
+                  and we&apos;ll sort it.
+                </>
+              )}
+            </p>
+          )}
           <p className="mt-3 text-xs text-ink-soft/70">
             One-time payment. Secure checkout via Stripe.
           </p>

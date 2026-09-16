@@ -213,6 +213,32 @@ can type that — only Stripe's own answer, server-side.
 
 ---
 
+## Before you take real money
+
+Fill in [`lib/legal.ts`](lib/legal.ts): a support email, the name you're
+trading under, and the country you're selling from. Until you do, `/terms` and
+`/refunds` return **404** and the footer hides those links — deliberately.
+Publishing a policy with `[YOUR NAME]` still in it is worse than not having the
+page, because a 404 is something you notice.
+
+That file is also what makes the site contactable at all. Note that the privacy
+policy already promises "email us and we'll delete your report" — an offer
+nobody could take up while there was no address anywhere on the site.
+
+> ⚠️ The text on `/terms` and `/refunds` is a **draft**, not legal advice, and
+> not written by a lawyer. Selling digital goods to consumers in the EU brings
+> specific obligations — trader identity, withdrawal rights and how a buyer
+> waives them for instant delivery, VAT treatment — that depend on where you're
+> established. Have someone qualified read it.
+>
+> One known gap to raise with them: the usual way to deliver digital content
+> instantly is to have the buyer agree at checkout that they give up the 14-day
+> withdrawal right once delivery begins. **This app doesn't collect that
+> agreement**, so the refund page promises a plain refund rather than leaning on
+> a waiver that was never taken.
+
+---
+
 ## Spend guards (read before opening this to the public)
 
 `/api/generate` takes no authentication, and every call it accepts enqueues a
