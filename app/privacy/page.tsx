@@ -44,6 +44,14 @@ export default function PrivacyPage() {
             hurt someone.
           </p>
 
+          <h2>Visitor numbers.</h2>
+          <p>
+            We count page views to see whether anyone is finding the site, using
+            Vercel Web Analytics. It sets no cookies and stores no identifier
+            that could follow you around — we see totals and rough sources of
+            traffic, never individual people or anything about your chat.
+          </p>
+
           <h2>Deleting a report.</h2>
           <p>
             Want a report gone?{" "}

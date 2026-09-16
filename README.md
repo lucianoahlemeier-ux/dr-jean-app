@@ -239,6 +239,37 @@ nobody could take up while there was no address anywhere on the site.
 
 ---
 
+## Knowing whether any of this is working
+
+Two halves, deliberately kept separate.
+
+**Traffic and referrers** — Vercel Web Analytics, wired up in
+[`app/layout.tsx`](app/layout.tsx). Enable it once in the Vercel dashboard
+(project → Analytics → Enable) or the script 404s and you'll see nothing. It's
+cookieless and sets no identifier, which is why it doesn't drag a consent
+banner onto a site whose whole pitch is not keeping your data. Note that on
+Hobby it's **page views only** — custom events are a Pro feature, so don't
+build a funnel on them expecting it to work.
+
+**The conversion funnel** — `/admin/stats?key=<ADMIN_KEY>`, read straight from
+the `reports` table, because every step already lives there as a column: a row
+exists (uploaded), `status = done` (generated), `stripe_session_id` set
+(clicked unlock), `paid` (converted). Duplicating that into an analytics
+product would create two sources of truth for the same numbers, and the one
+that bills you would be the less accurate one.
+
+Set `ADMIN_KEY` to any long random string (`openssl rand -hex 24`). Unset means
+the page 404s entirely — failing closed. It's one shared key rather than real
+auth, which is exactly why that page renders **aggregates only**: a leaked key
+exposes "42 reports sold", never 42 customers' private links.
+
+The number that decides whether the business works is **paid ÷ uploaded**,
+because reports are generated in full *before* the paywall — so every upload
+costs you an AI call whether or not it sells. Measure the real cost of a report
+and compare it against that ratio before spending anything on marketing.
+
+---
+
 ## Spend guards (read before opening this to the public)
 
 `/api/generate` takes no authentication, and every call it accepts enqueues a
