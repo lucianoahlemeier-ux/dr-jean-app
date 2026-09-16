@@ -267,8 +267,13 @@ export const generateReportFn = inngest.createFunction(
 
       logStage("generation-complete");
 
+      // MUST throw on failure. The report text exists only in memory at this
+      // point and the model call that produced it has already been paid for —
+      // if this write is lost the work is gone for good. Throwing lets Inngest
+      // retry, which is safe because the raw upload isn't deleted until the
+      // step after this one.
       await step.run("save-report", async () => {
-        await supabase
+        const { error } = await supabase
           .from("reports")
           .update({
             status: "done",
@@ -276,19 +281,52 @@ export const generateReportFn = inngest.createFunction(
             message_count: report.messageCount,
           })
           .eq("id", reportId);
+        if (error) {
+          throw new Error(`Could not save the finished report: ${error.message}`);
+        }
       });
+
+      // ─── Past this line the report is SAVED and the customer can read it.
+      // Nothing below may fail the run. Everything here used to sit inside the
+      // same try/catch as generation, so a failure in any of it flipped
+      // status back to "failed" — telling someone their report died while a
+      // complete, readable report sat in the database, with the source chat
+      // already deleted so it could never be regenerated. Log loudly, carry
+      // on. ───
 
       // Privacy promise: delete the raw upload immediately after generating.
       await step.run("delete-raw-upload", async () => {
-        await supabase.storage.from(UPLOADS_BUCKET).remove([storagePath]);
+        const { error } = await supabase.storage
+          .from(UPLOADS_BUCKET)
+          .remove([storagePath]);
+        // Not fatal to the run, but this is the promise the product is built
+        // on — a raw chat left sitting in storage is the one failure here
+        // that must never pass unnoticed.
+        if (error) {
+          console.error(
+            `[report ${reportId}] PRIVACY: failed to delete the raw upload ` +
+              `at ${storagePath} — it is still in storage: ${error.message}`,
+          );
+        }
       });
 
       await step.run("send-email", async () => {
-        await sendReportEmail({
-          to: email,
-          reportUrl: `${siteUrl()}/r/${token}`,
-          chatTitle: chat_title,
-        });
+        try {
+          const result = await sendReportEmail({
+            to: email,
+            reportUrl: `${siteUrl()}/r/${token}`,
+            chatTitle: chat_title,
+          });
+          if (!result.sent) {
+            logStage("email-not-sent", { reason: result.error });
+          }
+        } catch (err) {
+          // A thrown send (network, SDK) must not take the run down with it
+          // either — same reasoning as above.
+          logStage("email-threw", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       });
 
       logStage("run-complete");

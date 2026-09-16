@@ -9,16 +9,28 @@ export async function sendReportEmail(params: {
   to: string;
   reportUrl: string;
   chatTitle?: string | null;
-}): Promise<{ sent: boolean }> {
+}): Promise<{ sent: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from =
-    process.env.RESEND_FROM || `${persona.name} <onboarding@resend.dev>`;
+  const configuredFrom = process.env.RESEND_FROM?.trim();
+  const from = configuredFrom || `${persona.name} <onboarding@resend.dev>`;
 
   if (!apiKey) {
     console.log(
       `[email] Resend not configured — report link for ${params.to}: ${params.reportUrl}`,
     );
-    return { sent: false };
+    return { sent: false, error: "RESEND_API_KEY not set" };
+  }
+
+  // onboarding@resend.dev is Resend's shared test sender: it only delivers to
+  // the address that owns the Resend account, and silently fails for everyone
+  // else. Shipping on it means every customer's email vanishes — so say so
+  // rather than letting it look like it's working.
+  if (!configuredFrom) {
+    console.warn(
+      "[email] RESEND_FROM is not set, falling back to Resend's shared test " +
+        "sender. Mail will NOT reach anyone but your own Resend account " +
+        "address. Set RESEND_FROM to an address on a verified domain.",
+    );
   }
 
   const resend = new Resend(apiKey);
@@ -26,7 +38,7 @@ export async function sendReportEmail(params: {
     ? `${persona.name} read "${params.chatTitle}"`
     : `${persona.name} finished your report`;
 
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from,
     to: params.to,
     subject,
@@ -52,5 +64,20 @@ export async function sendReportEmail(params: {
     `,
   });
 
+  // The Resend SDK reports API failures in `error` rather than throwing, so a
+  // bare `await` here looked like success for every rejected send — an
+  // unverified domain, a rate limit, a bad recipient. Email IS the delivery
+  // mechanism for this product (no accounts, the link is the only key), so a
+  // silent failure means the customer simply never receives what they waited
+  // for, and nothing anywhere records it.
+  if (error) {
+    console.error(
+      `[email] Resend REJECTED the report email to ${params.to}: ` +
+        `${error.message ?? String(error)}`,
+    );
+    return { sent: false, error: error.message ?? String(error) };
+  }
+
+  console.log(`[email] report link sent to ${params.to}`);
   return { sent: true };
 }
